@@ -1,9 +1,10 @@
 # import libraries
-from collections import deque, namedtuple
+from collections import deque, namedtuple, Counter
 import cv2
 from tinydb import TinyDB
 from datetime import datetime
 import uuid
+from functools import reduce
 import argparse
 
 from loguru import logger
@@ -19,9 +20,16 @@ import cv2
 import onnxruntime
 import sys
 from pathlib import Path
+import statistics
 #local imports
 from headpose.src.face_detector import FaceDetector
 from headpose.src.utils import draw_axis
+
+########
+BLINK_THRESHOLD = 5
+
+########
+
 
 # construct the argument parse and parse the arguments
 ap = argparse.ArgumentParser()
@@ -29,7 +37,7 @@ ap.add_argument(
     "-bt", 
     "--blink-threshold",
     type=float,
-    default=4.5,
+    default=BLINK_THRESHOLD,
     help="EAR limit value to consider a blink")
 ap.add_argument(
     "-bfts", 
@@ -79,14 +87,24 @@ def HEAD_COMPENSATION_MAP(value):
     category = ''
 
     if value <= abs(4):
-        category = 'Pro'
+        category = 'PRO'
     elif (value > abs(4)) & (value <= abs(8)):
         category = 'AR'
     elif (value > abs(8)) & (value <= abs(16)):
-        category = 'Amateur'
+        category = 'AM'
     elif (value > abs(16)):
-        category = 'Beginner'
+        category = 'BEG'
     return category
+
+def percent_elements_in_dict(categs_dict):
+    total = sum(categs_dict.values())
+    percent = {key: f'{round(100 * (value/total))}%' for key, value in categs_dict.items()}
+    
+    return percent
+
+
+def list_mean(lst):
+    return reduce(lambda a, b: a + b, lst) / len(lst)
 
 # database connection
 db = TinyDB('db.json')
@@ -183,6 +201,18 @@ frame_counter = 0
 # blinks frequency queue
 blinks_bag = deque()
 
+yaw_acc = []
+roll_acc = []
+pitch_acc = []
+
+yaw_categ_acc = {'Pro': 0, 'AR': 0, 'Amateur': 0, 'Beginner': 0}
+roll_categ_acc = {'Pro': 0, 'AR': 0, 'Amateur': 0, 'Beginner': 0}
+pitch_categ_acc = {'Pro': 0, 'AR': 0, 'Amateur': 0, 'Beginner': 0}
+
+yaw_categ_acc = Counter()
+roll_categ_acc = Counter()
+pitch_categ_acc = Counter()
+
 
 # start
 while True:
@@ -239,10 +269,10 @@ while True:
 
         # blink duration
         if blink:
+            blink_duration=0
             blink_counter_duration += 1
             blink_duration = (blink_counter_duration / fps) * 1000
         else:
-            blink_duration=0
             blink_counter_duration=0
 
         # gaze direction
@@ -258,18 +288,18 @@ while True:
 
         #writing on frame
         if WRITE_STATS:
-            cv2.putText(frame, str(round(frame_counter / fps, 2)) + 'seg', (90, 1500), cv2.FONT_HERSHEY_DUPLEX, 1.3, (100, 0, 0), 3)
-            cv2.putText(frame, text, (90, 130), cv2.FONT_HERSHEY_DUPLEX, 2, (150, 0, 0), 3)
+            cv2.putText(frame, str(round(frame_counter / fps, 2)) + ' seg', (30, 800), cv2.FONT_HERSHEY_DUPLEX, 1.3, (0, 200, 0), 3)
+            cv2.putText(frame, text, (90, 130), cv2.FONT_HERSHEY_DUPLEX, 1.5, (100, 50, 150), 3)
             # cv2.putText(frame, "Left pupil:  " + str(left_pupil), (90, 230), cv2.FONT_HERSHEY_DUPLEX, 0.9, (147, 58, 31), 1)
             # cv2.putText(frame, "Right pupil: " + str(right_pupil), (90, 265), cv2.FONT_HERSHEY_DUPLEX, 0.9, (147, 58, 31), 1)
-            cv2.putText(frame, "Blinks " + str(blink_counter), (90, 200), cv2.FONT_HERSHEY_DUPLEX, 2, (150, 0, 0), 3)
-            cv2.putText(frame, "BF " + str(int(bf)) + 'blinks/10seg', (90, 250) , cv2.FONT_HERSHEY_DUPLEX, 2, (150, 0, 0), 3)
-            cv2.putText(frame, "Blink duration" + str(round(blink_duration, 2)) + 'ms', (90, 300), cv2.FONT_HERSHEY_DUPLEX, 2, (150, 0, 0), 3)
+            cv2.putText(frame, "Blinks " + str(blink_counter), (90, 200), cv2.FONT_HERSHEY_DUPLEX, 1.5, (100, 50, 150), 3)
+            cv2.putText(frame, "BF " + str(int(bf)) + ' blinks/10seg', (90, 250) , cv2.FONT_HERSHEY_DUPLEX, 1.5, (100, 50, 150), 3)
+            cv2.putText(frame, "Blink duration " + str(round(blink_duration, 2)) + 'ms', (90, 300), cv2.FONT_HERSHEY_DUPLEX, 1.5, (100, 50, 150), 3)
             if gaze.pupils_located:
                 ear_left = str(round(gaze.blinking_ratio()[0], 1))
                 ear_right = str(round(gaze.blinking_ratio()[1], 1))
-                cv2.putText(frame, "EAR: Left: " + str(round(gaze.blinking_ratio()[0], 1)), (90, 350), cv2.FONT_HERSHEY_DUPLEX, 2, (150, 0, 0), 3)
-                cv2.putText(frame, "EAR: Right: " + str(round(gaze.blinking_ratio()[1], 1)), (90, 400), cv2.FONT_HERSHEY_DUPLEX, 2, (150, 0, 0), 3)
+                cv2.putText(frame, "EAR: Left: " + str(round(gaze.blinking_ratio()[0], 1)), (90, 350), cv2.FONT_HERSHEY_DUPLEX, 1.5, (100, 50, 150), 3)
+                cv2.putText(frame, "EAR: Right: " + str(round(gaze.blinking_ratio()[1], 1)), (90, 400), cv2.FONT_HERSHEY_DUPLEX, 1.5, (100, 50, 150), 3)
             else:
                 ear_left = ''
                 ear_right = ''
@@ -302,18 +332,40 @@ while True:
 
             yaw,pitch,roll = np.mean(np.vstack((res1,res2)),axis=0)
 
+            yaw_acc.append(float(yaw))
+            pitch_acc.append(float(yaw)) 
+            roll_acc.append(float(roll))
+
 
             # cv2.putText(frame, f'YAW: {str(round(yaw, 2))}', (x1, y2+50), cv2.FONT_HERSHEY_DUPLEX, 1.5, (100, 50, 150), 3)
             # cv2.putText(frame, f'PITCH: {str(round(pitch, 2))}', (x1, y2+100), cv2.FONT_HERSHEY_DUPLEX, 1.5, (100, 50, 150), 3)
             # cv2.putText(frame, f'ROLL: {str(round(roll, 2))}', (x1, y2+150), cv2.FONT_HERSHEY_DUPLEX, 1.5, (100, 50, 150), 3)
+            # logger.info(type(yaw_acc[0]))
+            yaw_mean = round(statistics.pstdev(yaw_acc), 3)
+            pitch_mean = round(statistics.pstdev(pitch_acc), 3)
+            roll_mean = round(statistics.pstdev(roll_acc), 3)
 
-            yaw_categ_ = HEAD_COMPENSATION_MAP(yaw)
-            pitch_categ_ = HEAD_COMPENSATION_MAP(pitch)
-            roll_categ_ = HEAD_COMPENSATION_MAP(roll)
+            yaw_categ_ = HEAD_COMPENSATION_MAP(yaw_mean)
+            pitch_categ_ = HEAD_COMPENSATION_MAP(pitch_mean)
+            roll_categ_ = HEAD_COMPENSATION_MAP(roll_mean)
 
-            cv2.putText(frame, f'YAW: {yaw_categ_}', (x1, y2+50), cv2.FONT_HERSHEY_DUPLEX, 1.5, (100, 50, 150), 3)
-            cv2.putText(frame, f'PITCH: {pitch_categ_}', (x1, y2+100), cv2.FONT_HERSHEY_DUPLEX, 1.5, (100, 50, 150), 3)
-            cv2.putText(frame, f'ROLL: {roll_categ_}', (x1, y2+150), cv2.FONT_HERSHEY_DUPLEX, 1.5, (100, 50, 150), 3)
+            yaw_categ_acc.update([yaw_categ_])
+            roll_categ_acc.update([roll_categ_])
+            pitch_categ_acc.update([pitch_categ_])
+
+            logger.info(yaw_acc)
+            logger.info(yaw_mean)
+
+
+            cv2.putText(frame, f'YAW: {round(yaw_mean, 2)} | {yaw}', (x1-150, y2+50), cv2.FONT_HERSHEY_DUPLEX, 1.3, (100, 50, 150), 2) 
+            cv2.putText(frame, f'PITCH: {round(pitch_mean, 2)} | {pitch}', (x1-150, y2+100), cv2.FONT_HERSHEY_DUPLEX, 1.3, (100, 50, 150), 2)
+            cv2.putText(frame, f'ROLL: {round(roll_mean, 2)} | {roll}', (x1-150, y2+150), cv2.FONT_HERSHEY_DUPLEX, 1.3, (100, 50, 150), 2)
+
+
+
+            # cv2.putText(frame, f'YAW: {round(yaw_mean)} | {percent_elements_in_dict(yaw_categ_acc)}', (x1-150, y2+50), cv2.FONT_HERSHEY_DUPLEX, 0.8, (100, 50, 150), 2)
+            # cv2.putText(frame, f'PITCH: {round(pitch_mean)} | {percent_elements_in_dict(pitch_categ_acc)}', (x1-150, y2+100), cv2.FONT_HERSHEY_DUPLEX, 0.8, (100, 50, 150), 2)
+            # cv2.putText(frame, f'ROLL: {round(roll_mean)} | {percent_elements_in_dict(roll_categ_acc)}', (x1-150, y2+150), cv2.FONT_HERSHEY_DUPLEX, 0.8, (100, 50, 150), 2)
 
             frame = draw_axis(frame,yaw,pitch,roll,tdx=(x2-x1)//2+x1,tdy=(y2-y1)//2+y1,size=50)
 
