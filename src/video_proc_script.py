@@ -1,29 +1,26 @@
 # import libraries
-from collections import deque, namedtuple, Counter
 import cv2
+import uuid
+import argparse
+import numpy as np
+import onnxruntime
+import statistics
+from collections import deque, namedtuple, Counter
 from tinydb import TinyDB
 from datetime import datetime
-import uuid
 from functools import reduce
-import argparse
-
+from argparse import ArgumentParser
+from pathlib import Path
 from loguru import logger
-logger.add("log/log.log", rotation="1 week")
 
 #import from local libraries
 from gaze_tracking import GazeTracking
-
-### Headpose estimator
-from argparse import ArgumentParser
-import numpy as np
-import cv2
-import onnxruntime
-import sys
-from pathlib import Path
-import statistics
-#local imports
+from db import DBClient
 from headpose.src.face_detector import FaceDetector
 from headpose.src.utils import draw_axis
+from utils import *
+
+
 
 ########
 BLINK_THRESHOLD = 5
@@ -72,7 +69,7 @@ ap.add_argument(
 
 args = vars(ap.parse_args())
 
-# env vars
+# constants
 BLINK_THRESHOLD = args['blink_threshold']
 BF_TIMESTEP = args['blink_freq_timestep']
 ATHLETE = args['athlete']
@@ -82,85 +79,22 @@ VIDEO_NAME = VIDEO_PATH.split('/')[-1].split('.')[0]
 VIDEO_FILE_NAME = VIDEO_PATH.split('/')[-1]
 # MEDIA_PATH = args['media_path']
 
-def HEAD_COMPENSATION_MAP(value):
-    value = abs(value)
-    category = ''
 
-    if value <= abs(4):
-        category = 'PRO'
-    elif (value > abs(4)) & (value <= abs(8)):
-        category = 'AR'
-    elif (value > abs(8)) & (value <= abs(16)):
-        category = 'AM'
-    elif (value > abs(16)):
-        category = 'BEG'
-    return category
-
-def percent_elements_in_dict(categs_dict):
-    total = sum(categs_dict.values())
-    percent = {key: f'{round(100 * (value/total))}%' for key, value in categs_dict.items()}
-    
-    return percent
-
-
-def list_mean(lst):
-    return reduce(lambda a, b: a + b, lst) / len(lst)
-
-# database connection
-db = TinyDB('db.json')
-db_tests = db.table('tests')
-db_tests_meta = db.table('tests_meta')
-
-
+# INITIALIZERS
+# logger
+logger.add("log/log.log", rotation="1 week")
+#db
+db = DBClient("db.json")
 # some definitions
 test_id = uuid.uuid4().hex
 dt_string = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-
-# definition of dict to store events by frame
-test_events = namedtuple(
-    'event', 
-    [
-        'test_id',
-        'frame',
-        'blink', 
-        'total_acc_blinks', 
-        'ear_left', 
-        'ear_right', 
-        'gaze_direction',
-        'blink_freq',
-        'blink_duration',
-        'left_pupil',
-        'right_pupil',
-        'yaw',
-        'yaw_categ',
-        'pitch',
-        'pitch_categ',
-        'roll',
-        'roll_categ'
-    ]
-)
-tmp_test_list = []
-
-tests_meta = {}
-test_meta = namedtuple(
-    'meta', 
-    [
-        'test_id', 
-        'video_file_name',
-        'datetime', 
-        'fps', 
-        'athlete',
-        'blink_threshold',
-        'bf_timestep'
-    ]
-)
-
 ### Initialize headpose-estimator
 face_d = FaceDetector()
-
 sess = onnxruntime.InferenceSession(f'headpose/pretrained/fsanet-1x1-iter-688590.onnx')
-
 sess2 = onnxruntime.InferenceSession(f'headpose/pretrained/fsanet-var-iter-688590.onnx')
+
+
+
 
 print("ONNX models loaded")
 
@@ -345,9 +279,9 @@ while True:
             pitch_mean = round(statistics.pstdev(pitch_acc), 3)
             roll_mean = round(statistics.pstdev(roll_acc), 3)
 
-            yaw_categ_ = HEAD_COMPENSATION_MAP(yaw_mean)
-            pitch_categ_ = HEAD_COMPENSATION_MAP(pitch_mean)
-            roll_categ_ = HEAD_COMPENSATION_MAP(roll_mean)
+            yaw_categ_ = head_compensation_mapper(yaw_mean)
+            pitch_categ_ = head_compensation_mapper(pitch_mean)
+            roll_categ_ = head_compensation_mapper(roll_mean)
 
             yaw_categ_acc.update([yaw_categ_])
             roll_categ_acc.update([roll_categ_])
@@ -420,5 +354,5 @@ while True:
         break
     
 # load reuslts on db
-db_tests.insert_multiple(tmp_test_list)
-db_tests_meta.insert(dict(meta._asdict()))
+db.db_tests.insert_multiple(tmp_test_list)
+db.db_tests_meta.insert(dict(meta._asdict()))
