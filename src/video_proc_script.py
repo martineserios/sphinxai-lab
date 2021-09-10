@@ -80,7 +80,7 @@ VIDEO_FILE_NAME = VIDEO_PATH.split('/')[-1]
 # MEDIA_PATH = args['media_path']
 
 
-# INITIALIZERS
+# initializers
 # logger
 logger.add("log/log.log", rotation="1 week")
 #db
@@ -92,45 +92,45 @@ dt_string = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
 face_d = FaceDetector()
 sess = onnxruntime.InferenceSession(f'headpose/pretrained/fsanet-1x1-iter-688590.onnx')
 sess2 = onnxruntime.InferenceSession(f'headpose/pretrained/fsanet-var-iter-688590.onnx')
-
-
-
-
-print("ONNX models loaded")
-
+logger.info("ONNX models loaded")
 # initialize gaze tracking
 gaze = GazeTracking(BLINK_THRESHOLD)
 
-# capture video from file
-# cap = cv2.VideoCapture(f'{MEDIA_PATH}{VIDEO_NAME}')
-cap = cv2.VideoCapture(f'{VIDEO_PATH}')
-
-# get fps of video file
-fps = cap.get(cv2.CAP_PROP_FPS)
-fourcc = cv2.VideoWriter_fourcc(*'XVID') 
-
-# We need to set resolutions. 
-# so, convert them from float to integer. 
-frame_width = int(cap.get(3)) 
-frame_height = int(cap.get(4)) 
-size = (frame_width, frame_height) 
-   
-# Below VideoWriter object will create 
-# a frame of above defined The output
-if WRITE_STATS:
-    result = cv2.VideoWriter(f'../media_out/{VIDEO_NAME}_out.mp4',  
-                            fourcc, 
-                            30, 
-                            size) 
 
 
 
-# definition of vars for counting events occurence
-blink_counter = 0
-prev_blink = 0
-blink_counter_duration = 0
-blink_duration = 0
-frame_counter = 0
+class InputVideoCapture():    
+    def __init__(self, path_to_dir, video_name) -> None:
+        self.file_name = VIDEO_NAME
+        self.path_to_dir = VIDEO_PATH
+        # capture video from file
+        self.cap = cv2.VideoCapture(f'{self.path_to_dir}')
+        # get fps of video file
+        self.fps = self.cap.get(cv2.CAP_PROP_FPS)
+        self.fourcc = cv2.VideoWriter_fourcc(*'XVID') 
+        self.frame_width = int(self.cap.get(3)) 
+        self.frame_height = int(self.cap.get(4)) 
+        self.size = (self.frame_width, self.frame_height) 
+        # Below VideoWriter object will create 
+        # a frame of above defined The output
+        if WRITE_STATS:
+            self.result = cv2.VideoWriter(f'../media_out/{self.file_name}_out.mp4',  
+                                    self.fourcc, 
+                                    30, 
+                                    self.size) 
+
+
+video = InputVideoCapture(VIDEO_PATH, VIDEO_NAME)   
+
+
+class Blinking():
+
+    # definition of vars for counting events occurence
+    blink_counter = 0
+    prev_blink = 0
+    blink_counter_duration = 0
+    blink_duration = 0
+    frame_counter = 0
 
 # blinks frequency queue
 blinks_bag = deque()
@@ -151,7 +151,7 @@ pitch_categ_acc = Counter()
 # start
 while True:
     # We get a new frame from the cap
-    ret, frame = cap.read()
+    ret, frame = video.cap.read()
     logger.info(ret)
 
     if ret:
