@@ -53,3 +53,7 @@ class DBClient():
                                                 'bf_timestep'
                                             ]
                                     )
+
+    def persist(self):
+        self.db_tests.insert_multiple(self.test_events)
+        self.db_tests_meta.insert(dict(self.test_meta._asdict()))

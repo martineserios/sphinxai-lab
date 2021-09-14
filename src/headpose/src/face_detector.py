@@ -33,16 +33,6 @@ class FaceDetector:
         #detector prediction threshold
         self.confidence = 0.7
 
-
-    def get(self,img):
-        """
-        Given a image, detect faces and compute their bb
-
-        """
-        bb =  self._detect_face_ResNet10_SSD(img)
-
-        return bb
-
     def _detect_face_ResNet10_SSD(self,img):
         """
         Given a img, detect faces in it using resnet10_ssd detector
@@ -91,3 +81,13 @@ class FaceDetector:
             faces_bb = np.array(faces_bb)
 
         return faces_bb
+
+
+    def get(self,img):
+        """
+        Given a image, detect faces and compute their bb
+
+        """
+        bb =  self._detect_face_ResNet10_SSD(img)
+
+        return bb
