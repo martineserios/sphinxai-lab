@@ -108,9 +108,10 @@ class BlinkingTracker():
         self.blinks_bag = deque()
         self.prev_blink = 0
         self.blink_counter = 0
+        self.blink_duration = 0
         self.blink_counter_duration = 0
 
-    def blink_freq(self, frame_counter):
+    def get_blink_freq(self, frame_counter):
         if frame_counter <= int(BF_TIMESTEP * round(video.fps,0)):
             if self.blink:
                 if self.prev_blink == 0:
@@ -137,15 +138,16 @@ class BlinkingTracker():
         
         return self.blinks_bag.count(1)
 
-    def blink_duration(self):
+    def get_blink_duration(self):
         if self.blink:
-            blink_duration = 0
+            self.blink_duration = 0
             self.blink_counter_duration += 1
-            blink_duration = (self.blink_counter_duration / video.fps) * 1000
+            self.blink_duration = (self.blink_counter_duration / video.fps) * 1000
         else:
             self.blink_counter_duration = 0
+            self.blink_duration = 0
 
-        return blink_duration
+        return self.blink_duration
 
 
 class HeadPoseAnalyzer():
@@ -273,7 +275,7 @@ while True:
         
         # blinking
         blink_counter = blink_tracker.blink_counter
-        blink_freq = blink_tracker.blink_freq(frame_counter)
+        blink_freq = blink_tracker.get_blink_freq(frame_counter)
 
         # gaze direction
         if gaze.is_right():
@@ -287,10 +289,10 @@ while True:
         right_pupil = gaze.pupil_right_coords()
 
         # head pose analysis
-        face_bb = face_d.get(frame)
+        face_bb = face_analysis.face_d.get(frame)
         if face_bb is not None:
 
-            yaw_categ_acc, roll_categ_acc, pitch_categ_acc = face_analysis.get_axis_data()
+            yaw_categ_acc, roll_categ_acc, pitch_categ_acc = face_analysis.get_axis_data(face_bb, frame)
 
 
         #writing on frame
@@ -301,7 +303,7 @@ while True:
             # cv2.putText(frame, "Right pupil: " + str(right_pupil), (90, 265), cv2.FONT_HERSHEY_DUPLEX, 0.9, (147, 58, 31), 1)
             cv2.putText(frame, "Blinks " + str(blink_counter), (90, 200), cv2.FONT_HERSHEY_DUPLEX, 1.5, (100, 50, 150), 3)
             cv2.putText(frame, "BF " + str(int(blink_freq)) + ' blinks/10seg', (90, 250) , cv2.FONT_HERSHEY_DUPLEX, 1.5, (100, 50, 150), 3)
-            cv2.putText(frame, "Blink duration " + str(round(blink_tracker.blink_duration, 2)) + 'ms', (90, 300), cv2.FONT_HERSHEY_DUPLEX, 1.5, (100, 50, 150), 3)
+            cv2.putText(frame, "Blink duration " + str(round(blink_tracker.get_blink_duration(), 2)) + 'ms', (90, 300), cv2.FONT_HERSHEY_DUPLEX, 1.5, (100, 50, 150), 3)
             if gaze.pupils_located:
                 ear_left = str(round(gaze.blinking_ratio()[0], 1))
                 ear_right = str(round(gaze.blinking_ratio()[1], 1))
@@ -337,7 +339,7 @@ while True:
             # cv2.putText(frame, f'PITCH: {round(pitch_mean)} | {percent_elements_in_dict(pitch_categ_acc)}', (x1-150, y2+100), cv2.FONT_HERSHEY_DUPLEX, 0.8, (100, 50, 150), 2)
             # cv2.putText(frame, f'ROLL: {round(roll_mean)} | {percent_elements_in_dict(roll_categ_acc)}', (x1-150, y2+150), cv2.FONT_HERSHEY_DUPLEX, 0.8, (100, 50, 150), 2)
 
-            yaw_categ_acc, roll_categ_acc, pitch_categ_acc = face_analysis.get_axis_data()
+            # yaw_categ_acc, roll_categ_acc, pitch_categ_acc = face_analysis.get_axis_data()
            
             frame = draw_axis(
                 frame,
@@ -367,8 +369,8 @@ while True:
                 ear_left = ear_left, 
                 ear_right = ear_right, 
                 gaze_direction = text,
-                blink_freq = blink_tracker.bf,
-                blink_duration = blink_tracker.blink_duration,
+                blink_freq = blink_freq,
+                blink_duration = blink_tracker.get_blink_duration(),
                 left_pupil = str(left_pupil),
                 right_pupil = str(right_pupil),
                 yaw = str(round(face_analysis.yaw, 2)),
