@@ -83,10 +83,10 @@ target/
 /media_out/
 /media_tmp/
 db.json
-*.dat
-*.onnx
-*.caffemodel
-*.prototxt
+# *.dat
+# *.onnx
+# *.caffemodel
+# *.prototxt
 
 # gcp key
 SphinxAI-9005428e5618.json

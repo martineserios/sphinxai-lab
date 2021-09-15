@@ -104,12 +104,15 @@ class InputVideoCapture():
 class BlinkingTracker():
     def __init__(self, gaze: GazeTracking) -> None:
         self.gaze = gaze
-        self.blink = gaze.is_blinking()
+        self.blink = False
         self.blinks_bag = deque()
         self.prev_blink = 0
         self.blink_counter = 0
         self.blink_duration = 0
         self.blink_counter_duration = 0
+
+    def is_blinking(self):
+        self.blink = self.gaze.is_blinking()
 
     def get_blink_freq(self, frame_counter):
         if frame_counter <= int(BF_TIMESTEP * round(video.fps,0)):
@@ -274,6 +277,7 @@ while True:
         frame = gaze.annotated_frame()
         
         # blinking
+        blink_tracker.is_blinking()
         blink_counter = blink_tracker.blink_counter
         blink_freq = blink_tracker.get_blink_freq(frame_counter)
 
