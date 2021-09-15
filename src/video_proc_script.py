@@ -90,8 +90,8 @@ class InputVideoCapture():
         # get fps of video file
         self.fps = self.cap.get(cv2.CAP_PROP_FPS)
         self.fourcc = cv2.VideoWriter_fourcc(*'XVID') 
-        self.frame_width = int(self.cap.get(4)) 
-        self.frame_height = int(self.cap.get(3)) 
+        self.frame_width = int(self.cap.get(3)) 
+        self.frame_height = int(self.cap.get(4)) 
         self.size = (self.frame_width, self.frame_height) 
         # Below VideoWriter object will create 
         # a frame of above defined The output
