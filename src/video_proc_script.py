@@ -4,6 +4,7 @@ import uuid
 import argparse
 import numpy as np
 import onnxruntime
+import imutils
 import statistics
 from collections import deque, namedtuple, Counter
 from tinydb import TinyDB
@@ -89,8 +90,8 @@ class InputVideoCapture():
         # get fps of video file
         self.fps = self.cap.get(cv2.CAP_PROP_FPS)
         self.fourcc = cv2.VideoWriter_fourcc(*'XVID') 
-        self.frame_width = int(self.cap.get(3)) 
-        self.frame_height = int(self.cap.get(4)) 
+        self.frame_width = int(self.cap.get(4)) 
+        self.frame_height = int(self.cap.get(3)) 
         self.size = (self.frame_width, self.frame_height) 
         # Below VideoWriter object will create 
         # a frame of above defined The output
@@ -254,8 +255,8 @@ db = DBClient("db.json")
 test_id = uuid.uuid4().hex
 dt_string = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
 # initialize gaze tracking
-gaze = GazeTracking(BLINK_THRESHOLD)
 video = InputVideoCapture(VIDEO_PATH, VIDEO_NAME)   
+gaze = GazeTracking(BLINK_THRESHOLD)
 # start
 frame_counter = 0
 blink_tracker = BlinkingTracker(gaze)
@@ -282,6 +283,7 @@ while True:
         blink_freq = blink_tracker.get_blink_freq(frame_counter)
 
         # gaze direction
+        text = ""
         if gaze.is_right():
             text = "Looking right"
         elif gaze.is_left():
@@ -295,8 +297,10 @@ while True:
         # head pose analysis
         face_bb = face_analysis.face_d.get(frame)
         if face_bb is not None:
-
-            yaw_categ_acc, roll_categ_acc, pitch_categ_acc = face_analysis.get_axis_data(face_bb, frame)
+            try:
+                yaw_categ_acc, roll_categ_acc, pitch_categ_acc = face_analysis.get_axis_data(face_bb, frame)
+            except:
+                yaw_categ_acc, roll_categ_acc, pitch_categ_acc = None, None, None
 
 
         #writing on frame
@@ -365,7 +369,7 @@ while True:
 
 
             # place results on dicts
-            event = db.test_events(
+            db.test_events(
                 test_id = test_id,
                 frame = frame_counter,
                 blink = blink_tracker.blink, 
@@ -384,9 +388,9 @@ while True:
                 roll = str(round(face_analysis.roll, 2)),
                 roll_categ = face_analysis.roll_categ_
             )
-            tmp_test_list.append(dict(event._asdict()))
+            tmp_test_list.append(dict(db.test_event._asdict()))
 
-            meta = db.test_meta(
+            db.test_meta(
                 test_id=test_id,
                 video_file_name=VIDEO_FILE_NAME,
                 datetime=dt_string,
@@ -398,6 +402,7 @@ while True:
 
         # write frame on otput file
         if WRITE_STATS:
+            # rotated = imutils.rotate_bound(frame, -90)
             video.result.write(frame)
 
 
@@ -407,4 +412,4 @@ while True:
         break
     
 # load reuslts on db
-db.persist()
+# db.persist()

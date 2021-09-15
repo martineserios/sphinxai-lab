@@ -27,9 +27,6 @@ class FaceDetector:
         self.detector = cv2.dnn.readNetFromCaffe(str(config_path),
                                             str(face_model_path))
 
-        self.detector.setPreferableBackend(cv2.dnn.DNN_BACKEND_CUDA)
-        self.detector.setPreferableTarget(cv2.dnn.DNN_TARGET_CUDA)
-
         #detector prediction threshold
         self.confidence = 0.7
 
