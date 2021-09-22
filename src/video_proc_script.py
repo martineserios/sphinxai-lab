@@ -213,11 +213,11 @@ class HeadPoseAnalyzer():
         value = abs(value)
         category = ''
 
-        if value <= abs(4):
+        if value <= abs(2):
             category = 'PRO'
-        elif (value > abs(4)) & (value <= abs(8)):
+        elif (value > abs(2)) & (value <= abs(4)):
             category = 'AR'
-        elif (value > abs(8)) & (value <= abs(16)):
+        elif (value > abs(4)) & (value <= abs(6)):
             category = 'AM'
         elif (value > abs(16)):
             category = 'BEG'
@@ -269,9 +269,7 @@ blink_tracker = BlinkingTracker(gaze)
 face_analysis = HeadPoseAnalyzer()
 tmp_test_list = []
 
-i=0
-while i < 10:
-    i += 1
+while True:
     # We get a new frame from the cap
     ret, frame = video.cap.read()
     logger.info(ret)
@@ -416,7 +414,7 @@ while i < 10:
                 bf_timestep=BF_TIMESTEP
                 )._asdict()
         )
-        # cv2.imshow("test", frame)
+        cv2.imshow("test", frame)
         # write frame on otput file
         if WRITE_STATS:
             video.result.write(frame)
