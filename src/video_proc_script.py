@@ -14,7 +14,7 @@ from argparse import ArgumentParser
 from pathlib import Path
 # logger
 from loguru import logger
-logger.add("log/log.log", rotation="1 week")
+# logger.add("log/log.log", rotation="1 week")
 
 #import from local libraries
 from gaze_tracking import GazeTracking
@@ -26,6 +26,7 @@ from utils import *
 
 ########
 BLINK_THRESHOLD = 5
+VIDEO_ROTATION = 90
 ########
 
 
@@ -82,6 +83,7 @@ VIDEO_FILE_NAME = VIDEO_PATH.split('/')[-1]
 
 
 class InputVideoCapture():    
+    # cv2.CAP_PROP_ORIENTATION_AUTO = True
     def __init__(self, path_to_dir, video_name) -> None:
         self.file_name = video_name
         self.path_to_dir = path_to_dir
@@ -89,9 +91,9 @@ class InputVideoCapture():
         self.cap = cv2.VideoCapture(f'{self.path_to_dir}')
         # get fps of video file
         self.fps = self.cap.get(cv2.CAP_PROP_FPS)
-        self.fourcc = cv2.VideoWriter_fourcc(*'XVID') 
-        self.frame_width = int(self.cap.get(3)) 
-        self.frame_height = int(self.cap.get(4)) 
+        self.fourcc = cv2.VideoWriter_fourcc(*'mp4v') 
+        self.frame_width = int(self.cap.get(3))
+        self.frame_height = int(self.cap.get(4))
         self.size = (self.frame_width, self.frame_height) 
         # Below VideoWriter object will create 
         # a frame of above defined The output
@@ -99,7 +101,8 @@ class InputVideoCapture():
             self.result = cv2.VideoWriter(f'../media_out/{self.file_name}_out.mp4',  
                                     self.fourcc, 
                                     30, 
-                                    self.size) 
+                                    self.size
+                                    )
 
 
 class BlinkingTracker():
@@ -157,6 +160,9 @@ class BlinkingTracker():
 class HeadPoseAnalyzer():
 
     def __init__(self) -> None:
+        self.yaw = 0
+        self.pitch = 0
+        self.roll = 0
         self.yaw_acc = []
         self.pitch_acc = []
         self.roll_acc = []
@@ -200,9 +206,7 @@ class HeadPoseAnalyzer():
 
             logger.info(np.mean(np.vstack((res1,res2)),axis=0))
 
-            yaw, pitch, roll = np.mean(np.vstack((res1,res2)),axis=0)
-
-            return yaw, pitch, roll
+            self.yaw, self.pitch, self.roll = np.mean(np.vstack((res1,res2)),axis=0)
  
     @staticmethod
     def head_compensation_mapper(value):
@@ -220,7 +224,9 @@ class HeadPoseAnalyzer():
         return category
 
 
-    def get_axis_variation_acc(self):
+    def get_axis_variation_acc(self, face_bb, frame):
+
+        self.get_axis_data(face_bb, frame)
 
         self.yaw_acc.append(float(self.yaw))
         self.pitch_acc.append(float(self.pitch)) 
@@ -263,8 +269,9 @@ blink_tracker = BlinkingTracker(gaze)
 face_analysis = HeadPoseAnalyzer()
 tmp_test_list = []
 
-
-while True:
+i=0
+while i < 10:
+    i += 1
     # We get a new frame from the cap
     ret, frame = video.cap.read()
     logger.info(ret)
@@ -273,9 +280,15 @@ while True:
         frame_counter += 1
         logger.info(f'Frame: {str(frame_counter)}')
 
+        frame = imutils.rotate_bound(frame, VIDEO_ROTATION)
+
         # We send this frame to GazeTracking to analyze it
         gaze.refresh(frame)
         frame = gaze.annotated_frame()
+
+        # logger.info(video.rotation)
+
+
         
         # blinking
         blink_tracker.is_blinking()
@@ -298,7 +311,7 @@ while True:
         face_bb = face_analysis.face_d.get(frame)
         if face_bb is not None:
             try:
-                yaw_categ_acc, roll_categ_acc, pitch_categ_acc = face_analysis.get_axis_data(face_bb, frame)
+                face_analysis.get_axis_variation_acc(face_bb, frame)
             except:
                 yaw_categ_acc, roll_categ_acc, pitch_categ_acc = None, None, None
 
@@ -320,13 +333,6 @@ while True:
             else:
                 ear_left = ''
                 ear_right = ''
-        else:
-            if gaze.pupils_located:
-                ear_left = str(round(gaze.blinking_ratio()[0], 1))
-                ear_right = str(round(gaze.blinking_ratio()[1], 1))
-            else:
-                ear_left = ''
-                ear_right = ''
 
 
 
@@ -336,10 +342,9 @@ while True:
             # logger.info(type(yaw_acc[0]))
 
 
-
-            cv2.putText(frame, f'YAW: {round(face_bb.yaw_mean, 2)} | {face_analysis.yaw}', (face_analysis.x1-150, face_analysis.y2+50), cv2.FONT_HERSHEY_DUPLEX, 1.3, (100, 50, 150), 2) 
-            cv2.putText(frame, f'PITCH: {round(face_bb.pitch_mean, 2)} | {face_analysis.pitch}', (face_analysis.x1-150, face_analysis.y2+100), cv2.FONT_HERSHEY_DUPLEX, 1.3, (100, 50, 150), 2)
-            cv2.putText(frame, f'ROLL: {round(face_bb.roll_mean, 2)} | {face_analysis.roll}', (face_analysis.x1-150, face_analysis.y2+150), cv2.FONT_HERSHEY_DUPLEX, 1.3, (100, 50, 150), 2)
+            cv2.putText(frame, f'YAW: {round(face_analysis.yaw_mean, 2)} | {face_analysis.yaw}', (face_analysis.x1-150, face_analysis.y2+50), cv2.FONT_HERSHEY_DUPLEX, 1.3, (100, 50, 150), 2) 
+            cv2.putText(frame, f'PITCH: {round(face_analysis.pitch_mean, 2)} | {face_analysis.pitch}', (face_analysis.x1-150, face_analysis.y2+100), cv2.FONT_HERSHEY_DUPLEX, 1.3, (100, 50, 150), 2)
+            cv2.putText(frame, f'ROLL: {round(face_analysis.roll_mean, 2)} | {face_analysis.roll}', (face_analysis.x1-150, face_analysis.y2+150), cv2.FONT_HERSHEY_DUPLEX, 1.3, (100, 50, 150), 2)
 
 
 
@@ -347,7 +352,6 @@ while True:
             # cv2.putText(frame, f'PITCH: {round(pitch_mean)} | {percent_elements_in_dict(pitch_categ_acc)}', (x1-150, y2+100), cv2.FONT_HERSHEY_DUPLEX, 0.8, (100, 50, 150), 2)
             # cv2.putText(frame, f'ROLL: {round(roll_mean)} | {percent_elements_in_dict(roll_categ_acc)}', (x1-150, y2+150), cv2.FONT_HERSHEY_DUPLEX, 0.8, (100, 50, 150), 2)
 
-            # yaw_categ_acc, roll_categ_acc, pitch_categ_acc = face_analysis.get_axis_data()
            
             frame = draw_axis(
                 frame,
@@ -366,31 +370,43 @@ while True:
                 (0,255,0),
                 2
                 )
+        else:
+            if gaze.pupils_located:
+                ear_left = str(round(gaze.blinking_ratio()[0], 1))
+                ear_right = str(round(gaze.blinking_ratio()[1], 1))
+            else:
+                ear_left = ''
+                ear_right = ''
 
 
-            # place results on dicts
-            db.test_events(
-                test_id = test_id,
-                frame = frame_counter,
-                blink = blink_tracker.blink, 
-                total_acc_blinks = blink_counter, 
-                ear_left = ear_left, 
-                ear_right = ear_right, 
-                gaze_direction = text,
-                blink_freq = blink_freq,
-                blink_duration = blink_tracker.get_blink_duration(),
-                left_pupil = str(left_pupil),
-                right_pupil = str(right_pupil),
-                yaw = str(round(face_analysis.yaw, 2)),
-                yaw_categ = face_analysis.yaw_categ_,
-                pitch = str(round(face_analysis.pitch, 2)),
-                pitch_categ = face_analysis.pitch_categ_,
-                roll = str(round(face_analysis.roll, 2)),
-                roll_categ = face_analysis.roll_categ_
+        # place results on dicts
+        db.test_events.append(
+            dict(
+                db.test_event_template(
+                    test_id = test_id,
+                    frame = frame_counter,
+                    blink = blink_tracker.blink, 
+                    total_acc_blinks = blink_counter, 
+                    ear_left = ear_left, 
+                    ear_right = ear_right, 
+                    gaze_direction = text,
+                    blink_freq = blink_freq,
+                    blink_duration = blink_tracker.get_blink_duration(),
+                    left_pupil = str(left_pupil),
+                    right_pupil = str(right_pupil),
+                    yaw = str(round(face_analysis.yaw, 2)),
+                    yaw_categ = face_analysis.yaw_categ_,
+                    pitch = str(round(face_analysis.pitch, 2)),
+                    pitch_categ = face_analysis.pitch_categ_,
+                    roll = str(round(face_analysis.roll, 2)),
+                    roll_categ = face_analysis.roll_categ_
+                    )._asdict()
             )
-            tmp_test_list.append(dict(db.test_event._asdict()))
+        )
+        # tmp_test_list.append(dict(db.test_event._asdict()))
 
-            db.test_meta(
+        db.test_meta = dict(
+            db.test_meta_template(
                 test_id=test_id,
                 video_file_name=VIDEO_FILE_NAME,
                 datetime=dt_string,
@@ -398,11 +414,11 @@ while True:
                 athlete=ATHLETE,
                 blink_threshold=BLINK_THRESHOLD,
                 bf_timestep=BF_TIMESTEP
-            )
-
+                )._asdict()
+        )
+        # cv2.imshow("test", frame)
         # write frame on otput file
         if WRITE_STATS:
-            # rotated = imutils.rotate_bound(frame, -90)
             video.result.write(frame)
 
 
@@ -412,4 +428,4 @@ while True:
         break
     
 # load reuslts on db
-# db.persist()
+db.persist()

@@ -3,6 +3,7 @@ from collections import namedtuple
 from tinydb import TinyDB
 from datetime import datetime
 import uuid
+from loguru import logger
 
 # import local libs
 
@@ -21,8 +22,9 @@ class DBClient():
         self.db = TinyDB(path)
         self.db_tests = self.db.table('tests')
         self.db_tests_meta = self.db.table('tests_meta')
+
         # definition of dict to store events by frame
-        self.test_events = namedtuple('event', [
+        self.test_event_template = namedtuple('event', [
                                                     'test_id',
                                                     'frame',
                                                     'blink', 
@@ -42,8 +44,9 @@ class DBClient():
                                                     'roll_categ'
                                                 ]
                                         )
-        self.tests_meta = dict()
-        self.test_meta = namedtuple('meta', [
+        self.test_events = []
+
+        self.test_meta_template = namedtuple('meta', [
                                                 'test_id', 
                                                 'video_file_name',
                                                 'datetime', 
@@ -53,7 +56,8 @@ class DBClient():
                                                 'bf_timestep'
                                             ]
                                     )
+        self.test_meta = {}
 
     def persist(self):
         self.db_tests.insert_multiple(self.test_events)
-        self.db_tests_meta.insert(dict(self.test_meta._asdict()))
+        self.db_tests_meta.insert(self.test_meta)
